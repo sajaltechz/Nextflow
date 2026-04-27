@@ -68,6 +68,18 @@ export async function POST(req: Request) {
 
     const url = pickSslUrlFromAssemblyResults(assembly.results);
     return NextResponse.json({ url, mimeType: mime, kind });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      {
+        error: `Upload failed: ${message}`,
+        kind,
+        mimeType: mime,
+        fileName: file.name,
+        fileSize: file.size,
+      },
+      { status: 500 },
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -21,6 +21,16 @@ function handleOffset(index: number, total: number) {
   return `${((index + 1) / (total + 1)) * 100}%`;
 }
 
+async function readJsonSafe<T>(res: Response): Promise<T | null> {
+  const text = await res.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 export function WorkflowNode({ id, data, selected }: NodeProps) {
   const nodeData = data as Record<string, unknown>;
   const kind = String(nodeData.kind ?? "text");
@@ -51,8 +61,12 @@ export function WorkflowNode({ id, data, selected }: NodeProps) {
       fd.append("file", file);
       fd.append("kind", kind === "uploadImage" ? "image" : "video");
       const res = await fetch("/api/uploads", { method: "POST", body: fd });
-      const j = (await res.json()) as { url?: string; error?: string };
-      if (!res.ok) throw new Error(j.error ?? "Upload failed");
+      const j = await readJsonSafe<{ url?: string; error?: string }>(res);
+      if (!res.ok) {
+        throw new Error(
+          j?.error ?? `Upload failed (${res.status}). Check server logs/env vars for /api/uploads.`,
+        );
+      }
       if (!j.url) throw new Error("No URL returned");
       if (kind === "uploadImage") patchNode(id, { values: { imageUrl: j.url } });
       else patchNode(id, { values: { videoUrl: j.url } });
@@ -80,9 +94,9 @@ export function WorkflowNode({ id, data, selected }: NodeProps) {
           selectedNodeIds: [id],
         }),
       });
-      const j = (await res.json()) as { workflowId?: string; error?: string };
-      if (!res.ok) throw new Error(j.error ?? (await res.text()));
-      if (j.workflowId) setCurrentWorkflowId(j.workflowId);
+      const j = await readJsonSafe<{ workflowId?: string; error?: string }>(res);
+      if (!res.ok) throw new Error(j?.error ?? `Run failed (${res.status})`);
+      if (j?.workflowId) setCurrentWorkflowId(j.workflowId);
     } catch (ex) {
       patchNode(id, { error: ex instanceof Error ? ex.message : "Run failed" });
     } finally {
