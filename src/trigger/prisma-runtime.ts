@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { randomUUID } from "node:crypto";
 
 type TriggerDbLike = {
   workflowRun: {
@@ -53,11 +54,13 @@ export async function getTriggerPrisma(): Promise<TriggerDbLike> {
       create: async (args) => {
         const a = args as { data: Record<string, unknown> };
         const d = a.data;
+        const id = randomUUID();
         const q = await pool!.query(
-          `INSERT INTO "WorkflowRun" ("workflowId","userId","scope","status","durationMs","summaryJson")
-           VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+          `INSERT INTO "WorkflowRun" ("id","workflowId","userId","scope","status","durationMs","summaryJson")
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb)
            RETURNING "id","workflowId","userId","scope","status","durationMs","summaryJson","createdAt"`,
           [
+            id,
             d.workflowId,
             d.userId,
             d.scope,
@@ -109,10 +112,11 @@ export async function getTriggerPrisma(): Promise<TriggerDbLike> {
       create: async (args) => {
         const a = args as { data: Record<string, unknown> };
         const d = a.data;
+        const id = randomUUID();
         const q = await pool!.query(
-          `INSERT INTO "Workflow" ("userId","name","nodesJson","edgesJson")
-           VALUES ($1,$2,$3::jsonb,$4::jsonb) RETURNING *`,
-          [d.userId, d.name, JSON.stringify(d.nodesJson ?? []), JSON.stringify(d.edgesJson ?? [])],
+          `INSERT INTO "Workflow" ("id","userId","name","nodesJson","edgesJson")
+           VALUES ($1,$2,$3,$4::jsonb,$5::jsonb) RETURNING *`,
+          [id, d.userId, d.name, JSON.stringify(d.nodesJson ?? []), JSON.stringify(d.edgesJson ?? [])],
         );
         return q.rows[0] as Record<string, unknown>;
       },
@@ -121,10 +125,12 @@ export async function getTriggerPrisma(): Promise<TriggerDbLike> {
       create: async (args) => {
         const a = args as { data: Record<string, unknown> };
         const d = a.data;
+        const id = randomUUID();
         await pool!.query(
-          `INSERT INTO "NodeExecution" ("runId","nodeId","nodeLabel","status","durationMs","inputJson","outputJson","error")
-           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8)`,
+          `INSERT INTO "NodeExecution" ("id","runId","nodeId","nodeLabel","status","durationMs","inputJson","outputJson","error")
+           VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9)`,
           [
+            id,
             d.runId,
             d.nodeId,
             d.nodeLabel,
