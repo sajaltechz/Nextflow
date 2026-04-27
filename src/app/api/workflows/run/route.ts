@@ -50,14 +50,42 @@ export async function POST(req: Request) {
     },
   });
 
-  await dispatchTriggerTask("workflow-orchestrator", {
-    runId: run.id,
-    workflowId: workflow.id,
-    userId,
-    scope: payload.scope,
-    selectedNodeIds: payload.selectedNodeIds ?? [],
-    singleNodeId: payload.singleNodeId ?? null,
-  });
+  try {
+    const handle = await dispatchTriggerTask("workflow-orchestrator", {
+      runId: run.id,
+      workflowId: workflow.id,
+      userId,
+      scope: payload.scope,
+      selectedNodeIds: payload.selectedNodeIds ?? [],
+      singleNodeId: payload.singleNodeId ?? null,
+    });
 
-  return NextResponse.json({ runId: run.id, workflowId: workflow.id, status: "queued" });
+    await prisma.workflowRun.update({
+      where: { id: run.id },
+      data: {
+        summaryJson: {
+          selectedNodeIds: payload.selectedNodeIds ?? [],
+          singleNodeId: payload.singleNodeId ?? null,
+          triggerRunId: (handle as { id?: string })?.id ?? null,
+        },
+      },
+    });
+
+    return NextResponse.json({ runId: run.id, workflowId: workflow.id, status: "queued" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await prisma.workflowRun.update({
+      where: { id: run.id },
+      data: {
+        status: "failed",
+        durationMs: 0,
+        summaryJson: {
+          selectedNodeIds: payload.selectedNodeIds ?? [],
+          singleNodeId: payload.singleNodeId ?? null,
+          enqueueError: message,
+        },
+      },
+    });
+    return NextResponse.json({ error: `Failed to enqueue workflow: ${message}` }, { status: 500 });
+  }
 }
