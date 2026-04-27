@@ -1,5 +1,4 @@
 import type { Edge } from "@xyflow/react";
-import type { Prisma } from "@prisma/client";
 import { tasks } from "@trigger.dev/sdk/v3";
 import { task } from "@trigger.dev/sdk/v3";
 import {
@@ -10,7 +9,7 @@ import {
   type FlowNode,
   type RunScope,
 } from "@/lib/dag";
-import { prisma } from "@/lib/prisma";
+import { getTriggerPrisma } from "@/trigger/prisma-runtime";
 
 export type NodeRunValue =
   | { kind: "text"; text: string }
@@ -79,6 +78,9 @@ export const workflowOrchestratorTask = task({
   id: "workflow-orchestrator",
   maxDuration: 3600,
   run: async (payload: OrchestratorPayload) => {
+    // Lazy-load Prisma from Trigger-specific runtime helper.
+    const prisma = await getTriggerPrisma();
+
     const t0 = Date.now();
     const { runId, workflowId, userId } = payload;
 
@@ -161,7 +163,7 @@ export const workflowOrchestratorTask = task({
             nodeLabel: getLabel(nodeMap.get(id)!),
             status: "failed",
             durationMs: 0,
-            inputJson: { reason: "upstream_dependency_failed" } as Prisma.InputJsonValue,
+            inputJson: { reason: "upstream_dependency_failed" } as unknown as object,
             error: "An upstream node failed or was skipped.",
           },
         });
@@ -289,8 +291,8 @@ export const workflowOrchestratorTask = task({
               nodeLabel: label,
               status: "success",
               durationMs,
-              inputJson: inputJson as Prisma.InputJsonValue,
-              outputJson: out as Prisma.InputJsonValue,
+              inputJson: inputJson as unknown as object,
+              outputJson: out as unknown as object,
             },
           });
         } catch (err) {
@@ -305,7 +307,7 @@ export const workflowOrchestratorTask = task({
               nodeLabel: label,
               status: "failed",
               durationMs,
-              inputJson: inputJson as Prisma.InputJsonValue,
+              inputJson: inputJson as unknown as object,
               error: message,
             },
           });
@@ -337,7 +339,7 @@ export const workflowOrchestratorTask = task({
 
     await prisma.workflow.update({
       where: { id_userId: { id: workflowId, userId } },
-      data: { nodesJson: mergedNodes as Prisma.InputJsonValue },
+      data: { nodesJson: mergedNodes as unknown as object },
     });
 
     return { status, durationMs, failed: [...failed], completed: outputs.size };
