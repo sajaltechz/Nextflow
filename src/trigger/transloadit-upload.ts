@@ -24,5 +24,5 @@ export async function uploadLocalFileToTransloadit(filePath: string): Promise<st
     throw new Error(`Transloadit assembly failed: ${assembly.error ?? assembly.message ?? "unknown"}`);
   }
 
-  return pickSslUrlFromAssemblyResults(assembly.results);
+  return pickSslUrlFromAssemblyResults(assembly);
 }

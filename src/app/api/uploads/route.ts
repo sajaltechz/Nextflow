@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const url = pickSslUrlFromAssemblyResults(assembly.results);
+    const url = pickSslUrlFromAssemblyResults(assembly);
     return NextResponse.json({ url, mimeType: mime, kind });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -1,14 +1,31 @@
-/** Extract first public HTTPS URL from a completed Transloadit assembly `results` map. */
-export function pickSslUrlFromAssemblyResults(results: unknown): string {
-  if (!results || typeof results !== "object") throw new Error("Transloadit assembly returned no results");
-  for (const items of Object.values(results as Record<string, unknown>)) {
-    if (!Array.isArray(items)) continue;
-    for (const item of items) {
-      if (!item || typeof item !== "object") continue;
-      const row = item as { ssl_url?: string | null; url?: string | null };
-      if (row.ssl_url) return row.ssl_url;
-      if (row.url) return row.url;
+/**
+ * Extract first public URL from a Transloadit response.
+ * Handles both `assembly.results` maps and full assembly objects because
+ * Transloadit responses can vary by robot/SDK versions.
+ */
+export function pickSslUrlFromAssemblyResults(input: unknown): string {
+  if (!input || typeof input !== "object") {
+    throw new Error("Transloadit assembly returned no response object");
+  }
+
+  const queue: unknown[] = [input];
+  const seen = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current || typeof current !== "object" || seen.has(current)) continue;
+    seen.add(current);
+
+    const row = current as { ssl_url?: string | null; url?: string | null };
+    if (typeof row.ssl_url === "string" && row.ssl_url.trim()) return row.ssl_url;
+    if (typeof row.url === "string" && row.url.trim()) return row.url;
+
+    if (Array.isArray(current)) {
+      queue.push(...current);
+    } else {
+      queue.push(...Object.values(current as Record<string, unknown>));
     }
   }
-  throw new Error("Transloadit assembly missing file URL in results");
+
+  throw new Error("Transloadit assembly missing file URL in response");
 }
