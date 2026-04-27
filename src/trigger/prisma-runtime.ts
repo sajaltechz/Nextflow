@@ -1,4 +1,6 @@
-type PrismaLike = {
+import { Pool } from "pg";
+
+type TriggerDbLike = {
   workflowRun: {
     update: (args: unknown) => Promise<unknown>;
     create: (args: unknown) => Promise<{ id: string } & Record<string, unknown>>;
@@ -14,17 +16,131 @@ type PrismaLike = {
   };
 };
 
-let cached: PrismaLike | null = null;
+let cached: TriggerDbLike | null = null;
+let pool: Pool | null = null;
 
 /**
- * Lazy runtime import so Trigger task indexing doesn't require Prisma to be
- * initialized at module-import time.
+ * Trigger runtime DB adapter that avoids Prisma binary issues in cloud workers.
  */
-export async function getTriggerPrisma(): Promise<PrismaLike> {
+export async function getTriggerPrisma(): Promise<TriggerDbLike> {
   if (cached) return cached;
-  const mod = await import("@prisma/client");
-  const PrismaClient = (mod as { PrismaClient: new (args?: unknown) => PrismaLike }).PrismaClient;
-  cached = new PrismaClient({ log: ["warn", "error"] });
+  const cs = process.env.DATABASE_URL;
+  if (!cs) throw new Error("DATABASE_URL is not set in Trigger runtime.");
+  pool = new Pool({ connectionString: cs });
+
+  const db: TriggerDbLike = {
+    workflowRun: {
+      update: async (args) => {
+        const a = args as { where: { id: string }; data: Record<string, unknown> };
+        const id = a.where.id;
+        const d = a.data;
+        const sets: string[] = [];
+        const vals: unknown[] = [];
+        let i = 1;
+        for (const [k, v] of Object.entries(d)) {
+          if (k === "summaryJson") {
+            sets.push(`"summaryJson" = $${i++}::jsonb`);
+            vals.push(JSON.stringify(v ?? null));
+          } else {
+            sets.push(`"${k}" = $${i++}`);
+            vals.push(v);
+          }
+        }
+        vals.push(id);
+        await pool!.query(`UPDATE "WorkflowRun" SET ${sets.join(", ")} WHERE "id" = $${i}`, vals);
+        return { id, ...d };
+      },
+      create: async (args) => {
+        const a = args as { data: Record<string, unknown> };
+        const d = a.data;
+        const q = await pool!.query(
+          `INSERT INTO "WorkflowRun" ("workflowId","userId","scope","status","durationMs","summaryJson")
+           VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+           RETURNING "id","workflowId","userId","scope","status","durationMs","summaryJson","createdAt"`,
+          [
+            d.workflowId,
+            d.userId,
+            d.scope,
+            d.status,
+            d.durationMs,
+            JSON.stringify(d.summaryJson ?? null),
+          ],
+        );
+        return q.rows[0] as { id: string } & Record<string, unknown>;
+      },
+      findMany: async () => [],
+    },
+    workflow: {
+      findFirst: async (args) => {
+        const a = args as { where: { id: string; userId: string } };
+        const q = await pool!.query(
+          `SELECT * FROM "Workflow" WHERE "id" = $1 AND "userId" = $2 LIMIT 1`,
+          [a.where.id, a.where.userId],
+        );
+        return (q.rows[0] ?? null) as Record<string, unknown> | null;
+      },
+      update: async (args) => {
+        const a = args as {
+          where: { id_userId: { id: string; userId: string } };
+          data: Record<string, unknown>;
+        };
+        const id = a.where.id_userId.id;
+        const userId = a.where.id_userId.userId;
+        const d = a.data;
+        const sets: string[] = [];
+        const vals: unknown[] = [];
+        let i = 1;
+        for (const [k, v] of Object.entries(d)) {
+          if (k.endsWith("Json")) {
+            sets.push(`"${k}" = $${i++}::jsonb`);
+            vals.push(JSON.stringify(v ?? null));
+          } else {
+            sets.push(`"${k}" = $${i++}`);
+            vals.push(v);
+          }
+        }
+        vals.push(id, userId);
+        const q = await pool!.query(
+          `UPDATE "Workflow" SET ${sets.join(", ")} WHERE "id" = $${i} AND "userId" = $${i + 1} RETURNING *`,
+          vals,
+        );
+        return q.rows[0];
+      },
+      create: async (args) => {
+        const a = args as { data: Record<string, unknown> };
+        const d = a.data;
+        const q = await pool!.query(
+          `INSERT INTO "Workflow" ("userId","name","nodesJson","edgesJson")
+           VALUES ($1,$2,$3::jsonb,$4::jsonb) RETURNING *`,
+          [d.userId, d.name, JSON.stringify(d.nodesJson ?? []), JSON.stringify(d.edgesJson ?? [])],
+        );
+        return q.rows[0] as Record<string, unknown>;
+      },
+    },
+    nodeExecution: {
+      create: async (args) => {
+        const a = args as { data: Record<string, unknown> };
+        const d = a.data;
+        await pool!.query(
+          `INSERT INTO "NodeExecution" ("runId","nodeId","nodeLabel","status","durationMs","inputJson","outputJson","error")
+           VALUES ($1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8)`,
+          [
+            d.runId,
+            d.nodeId,
+            d.nodeLabel,
+            d.status,
+            d.durationMs,
+            JSON.stringify(d.inputJson ?? null),
+            JSON.stringify(d.outputJson ?? null),
+            d.error ?? null,
+          ],
+        );
+        return { ok: true };
+      },
+    },
+  };
+
+  cached = db;
   return cached;
 }
 

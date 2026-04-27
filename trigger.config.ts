@@ -21,9 +21,8 @@ export default defineConfig({
   logLevel: "log",
   maxDuration: 3600,
   build: {
-    // Prisma uses native query engine binaries; keep these packages external so
-    // Trigger's image includes the engine files instead of bundling away paths.
-    external: ["@prisma/client", "prisma", ".prisma/client", "@prisma/engines"],
+    // Keep DB driver external; no Prisma runtime in Trigger workers.
+    external: ["pg"],
     autoDetectExternal: true,
   },
   retries: {
