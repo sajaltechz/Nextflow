@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NextFlow
 
-## Getting Started
+Krea-style workflow builder on **Next.js 15** (App Router), **TypeScript** (strict), **Tailwind**, **React Flow**, **Clerk**, **Prisma + Neon**, **Trigger.dev** (all node execution), **Transloadit** (uploads + post-FFmpeg files), and **Gemini** (inside Trigger tasks only).
 
-First, run the development server:
+## Environment variables
+
+1. Copy `.env.example` to `.env.local` in this folder.
+2. Fill every key (see comments in `.env.example` for where to sign up).
+3. **Never commit** `.env.local` (it stays gitignored).
+
+| Variable | Used by | Get it from |
+|----------|---------|-------------|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Next.js + middleware | [Clerk dashboard](https://dashboard.clerk.com) |
+| `DATABASE_URL` | Next.js + Trigger orchestrator (Prisma) | [Neon console](https://console.neon.tech) |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Trigger `llm-node` task | [Google AI Studio](https://aistudio.google.com/apikey) |
+| `TRIGGER_SECRET_KEY` | Next.js `tasks.trigger()` | [Trigger.dev](https://cloud.trigger.dev) → Project → API Keys |
+| `TRIGGER_PROJECT_ID` | `trigger.config.ts` / CLI | Same project → Project ID |
+| `TRANSLOADIT_AUTH_KEY`, `TRANSLOADIT_SECRET` | Next `/api/uploads` + Trigger crop/frame tasks | [Transloadit credentials](https://transloadit.com/credentials) |
+
+**Vercel:** add the same variables under Project → Settings → Environment Variables.
+
+**Trigger.dev workers:** mirror `DATABASE_URL`, `GOOGLE_GENERATIVE_AI_API_KEY`, `TRANSLOADIT_AUTH_KEY`, and `TRANSLOADIT_SECRET` into your Trigger project environment so FFmpeg and Gemini tasks can run in the cloud.
+
+## Scripts
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev              # Next.js
+npm run trigger:dev      # Trigger.dev dev worker (separate terminal)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+After changing `prisma/schema.prisma`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npx prisma migrate dev   # or db push for prototyping
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Product notes
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **API keys** are yours to create; the repo only documents names and wiring.
+- **Strict TypeScript** is enabled in `tsconfig.json`.
+- **Export / import** JSON is available from the workflow toolbar; **Save** persists to Postgres via existing API routes.
