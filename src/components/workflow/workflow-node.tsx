@@ -67,9 +67,10 @@ export function WorkflowNode({ id, data, selected }: NodeProps) {
           j?.error ?? `Upload failed (${res.status}). Check server logs/env vars for /api/uploads.`,
         );
       }
-      if (!j.url) throw new Error("No URL returned");
-      if (kind === "uploadImage") patchNode(id, { values: { imageUrl: j.url } });
-      else patchNode(id, { values: { videoUrl: j.url } });
+      const url = j?.url;
+      if (!url) throw new Error("No URL returned");
+      if (kind === "uploadImage") patchNode(id, { values: { imageUrl: url } });
+      else patchNode(id, { values: { videoUrl: url } });
     } catch (ex) {
       patchNode(id, { error: ex instanceof Error ? ex.message : "Upload failed" });
     } finally {
