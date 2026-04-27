@@ -1,18 +1,18 @@
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 
-// Trigger CLI does not load Next.js env files — load `.env` then `.env.local` (local wins).
-config({ path: resolve(process.cwd(), ".env") });
-config({ path: resolve(process.cwd(), ".env.local") });
+const configDir = dirname(fileURLToPath(import.meta.url));
+
+// Trigger CLI deploy can run from a different cwd, so resolve relative to this file.
+// Also allow shell env (TRIGGER_PROJECT_ID=...) to override file values naturally.
+config({ path: resolve(configDir, ".env") });
+config({ path: resolve(configDir, ".env.local") });
 
 import { defineConfig } from "@trigger.dev/sdk/v3";
 
-const project = process.env.TRIGGER_PROJECT_ID?.trim();
-if (!project) {
-  throw new Error(
-    'Set TRIGGER_PROJECT_ID in `.env` or `.env.local` to your Trigger project ref (e.g. "proj_abc123"). Find it in Trigger dashboard → your project → Settings.',
-  );
-}
+// Prefer explicit env override, otherwise use your fixed project ref.
+const project = process.env.TRIGGER_PROJECT_ID?.trim() || "proj_ifartnbvijaewppilkyv";
 
 export default defineConfig({
   project,
