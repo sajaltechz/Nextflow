@@ -64,6 +64,34 @@ export function WorkflowToolbar() {
         setMessage("Select exactly one node for single-node run.");
         return;
       }
+
+      const scopeNodeIds =
+        scope === "full"
+          ? new Set(state.nodes.map((n) => n.id))
+          : new Set(scope === "single" ? [state.selectedNodeIds[0]] : state.selectedNodeIds);
+
+      const missingUploads = state.nodes
+        .filter((n) => scopeNodeIds.has(n.id))
+        .flatMap((n) => {
+          const data = n.data as Record<string, unknown>;
+          const values =
+            data.values && typeof data.values === "object" ? (data.values as Record<string, unknown>) : {};
+          if (data.kind === "uploadImage" && !String(values.imageUrl ?? "").trim()) {
+            return [String(data.label ?? n.id)];
+          }
+          if (data.kind === "uploadVideo" && !String(values.videoUrl ?? "").trim()) {
+            return [String(data.label ?? n.id)];
+          }
+          return [];
+        });
+
+      if (missingUploads.length > 0) {
+        setMessage(
+          `Upload required before run: ${missingUploads.join(", ")}. Choose file(s) in those upload nodes first.`,
+        );
+        return;
+      }
+
       const res = await fetch("/api/workflows/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
